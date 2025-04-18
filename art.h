@@ -6,12 +6,14 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #define MAX_PREFIX_LEN 10
 
-typedef int (*art_callback)(void* data, char* key, void* value);
+typedef int (*art_callback)(uintptr_t data, char* key, uintptr_t value);
 
-typedef void (*value_destroy_callback)(void* value);
+typedef void (*value_destroy_callback)(uintptr_t value);
 
 /** @struct art
  * The ART tree
@@ -39,7 +41,7 @@ libart_art_create(struct art** tree);
  * @return 0 if the item was successfully inserted, otherwise 1
  */
 int
-libart_art_insert(struct art* t, char* key, void* value);
+libart_art_insert(struct art* t, char* key, uintptr_t value);
 
 /**
  * Check if a key exists in the ART tree
