@@ -5,6 +5,7 @@
 extern "C" {
 #endif
 
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -86,6 +87,33 @@ libart_art_clear(struct art* t);
  */
 int
 libart_art_destroy(struct art* tree);
+
+uint64_t
+libart_read_lock_and_restart(struct art_node* node);
+
+void
+libart_check_version_and_restart(struct art_node* node, uint64_t version);
+
+void
+libart_read_restart(struct art_node* node, uint64_t version);
+
+void
+libart_read_unlock_and_restart(struct art_node* node, uint64_t version, struct art_node* locked_node);
+
+void
+libart_upgrade_to_write_restart(struct art_node* node, uint64_t version);
+
+void
+libart_upgrade_to_write_unlock_and_restart(struct art_node* node, uint64_t version, struct art_node* locked_node);
+
+void
+libart_write_lock_or_restart(struct art_node* node);
+
+void
+libart_write_unlock(struct art_node* node);
+
+void
+libart_write_unlock_obsolete(struct art_node* node);
 
 #ifdef __cplusplus
 }

@@ -1,8 +1,14 @@
 #include "art.h"
 
+typedef _Atomic uint64_t atomic_uint64;
+
 #define IS_LEAF(x) (((uintptr_t)(x) & 1))
 #define SET_LEAF(x) ((void*)((uintptr_t)(x) | 1))
 #define GET_LEAF(x) ((struct art_leaf*)((void*)((uintptr_t)(x) & ~1)))
+
+#define IS_LOCK(x) (bool)(x & 2)
+#define IS_OBSOLETE(x) (bool)(x & 1)
+#define SET_LOCK_INCREMENT_VERSION(x) (x + 2)
 
 enum art_node_type {
     Node4,
@@ -18,9 +24,14 @@ enum art_node_type {
  * because we need the last bit to be 0 as a flag bit for leaf.
  * So that leaf can be treated as a node as well and stored in the children field,
  * and only converted back when necessary
+ * 
+ * The 64-bit version field is an atomic variable, The two least significant bits indicate 
+ * if the node is obsolete or if the node is locked, respectively. The remaining bits store the
+ * update counter.
  */
 struct art_node
 {
+    atomic_uint64 version;                   /**< A 64-bit version field that is read/written atomically */
     uint32_t prefix_len;                     /**< The actual length of the prefix segment */
     enum art_node_type type;                 /**< The node type */
     uint8_t num_children;                    /**< The number of children */
@@ -32,6 +43,7 @@ struct art_node
  */
 struct art_leaf
 {
+    atomic_uint64 version;
     void * value;
     uint32_t key_len;
     unsigned char key[];
@@ -123,6 +135,9 @@ destroy_art_node(struct art_node* node);
 
 static int
 art_iterate(struct art* t, art_callback cb, void * data);
+
+static uint64_t
+await_node_unlocked(struct art_node* node);
 
 /**
  * Get where the keys diverge starting from depth.
@@ -1312,4 +1327,13 @@ static int
 art_iterate(struct art* t, art_callback cb, void * data)
 {
     return art_node_iterate(t->root, cb, data);
+}
+
+static uint64_t 
+await_node_unlocked(struct art_node* node)
+{
+    uint64_t version = atomic_load(&node->version);
+    while(IS_LOCK(version))
+        version = atomic_load(&node->version);
+    return version;
 }
