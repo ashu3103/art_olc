@@ -7,21 +7,23 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define MAX_PREFIX_LEN 10
 
-typedef int (*art_callback)(uintptr_t data, char* key, uintptr_t value);
+typedef int (*art_callback)(void* data, char* key, void * value);
 
-typedef void (*value_destroy_callback)(uintptr_t value);
+typedef void (*value_destroy_callback)(void* value);
 
 /** @struct art
  * The ART tree
  */
 struct art
 {
-struct art_node* root;                 /**< The root node of ART */
-uint64_t size;                         /**< The size of the ART */
+    struct art_node* root;                 /**< The root node of ART */
+    uint64_t size;                         /**< The size of the ART */
 };
 
 /**
@@ -41,7 +43,7 @@ libart_art_create(struct art** tree);
  * @return 0 if the item was successfully inserted, otherwise 1
  */
 int
-libart_art_insert(struct art* t, char* key, uintptr_t value);
+libart_art_insert(struct art* t, char* key, void * value);
 
 /**
  * Check if a key exists in the ART tree
@@ -58,7 +60,7 @@ libart_art_contains_key(struct art* t, char* key);
  * @param key The key
  * @return NULL if the item was not found, otherwise the value pointer is returned
  */
-uintptr_t
+void *
 libart_art_search(struct art* t, char* key);
 
 /**

@@ -1,4 +1,4 @@
-#include <art.h>
+#include "art.h"
 
 #define IS_LEAF(x) (((uintptr_t)(x) & 1))
 #define SET_LEAF(x) ((void*)((uintptr_t)(x) | 1))
@@ -32,7 +32,7 @@ struct art_node
  */
 struct art_leaf
 {
-    uintptr_t value;
+    void * value;
     uint32_t key_len;
     unsigned char key[];
 } __attribute__ ((aligned (64)));
@@ -100,7 +100,7 @@ static struct art_leaf*
 node_get_minimum(struct art_node* node);
 
 static void
-create_art_leaf(struct art_leaf** leaf, unsigned char* key, uint32_t key_len, uintptr_t value);
+create_art_leaf(struct art_leaf** leaf, unsigned char* key, uint32_t key_len, void * value);
 
 static void
 create_art_node(struct art_node** node, enum art_node_type type);
@@ -122,7 +122,7 @@ static void
 destroy_art_node(struct art_node* node);
 
 static int
-art_iterate(struct art* t, art_callback cb, uintptr_t data);
+art_iterate(struct art* t, art_callback cb, void * data);
 
 /**
  * Get where the keys diverge starting from depth.
@@ -184,8 +184,8 @@ find_index(unsigned char ch, unsigned char* keys, int length);
  * @param new If the key value is newly inserted (not replaced)
  * @return Old value if the key exists, otherwise NULL
  */
-static uintptr_t
-art_node_insert(struct art_node* node, struct art_node** node_ref, uint32_t depth, unsigned char* key, uint32_t key_len, uintptr_t value, bool* new);
+static void *
+art_node_insert(struct art_node* node, struct art_node** node_ref, uint32_t depth, unsigned char* key, uint32_t key_len, void * value, bool* new);
 
 /**
  * Delete a value from a node recursively.
@@ -200,10 +200,10 @@ static struct art_leaf*
 art_node_delete(struct art_node* node, struct art_node** node_ref, uint32_t depth, unsigned char* key, uint32_t key_len);
 
 static int
-art_node_iterate(struct art_node* node, art_callback cb, uintptr_t data);
+art_node_iterate(struct art_node* node, art_callback cb, void * data);
 
 static void
-node_add_child(struct art_node* node, struct art_node** node_ref, unsigned char ch, uintptr_t child);
+node_add_child(struct art_node* node, struct art_node** node_ref, unsigned char ch, void * child);
 
 /**
  * Add a child to the node. The function assumes node is not NULL,
@@ -216,16 +216,16 @@ node_add_child(struct art_node* node, struct art_node** node_ref, unsigned char 
  * @param child The child
  */
 static void
-node4_add_child(struct art_node4* node, struct art_node** node_ref, unsigned char ch, uintptr_t child);
+node4_add_child(struct art_node4* node, struct art_node** node_ref, unsigned char ch, void * child);
 
 static void
-node16_add_child(struct art_node16* node, struct art_node** node_ref, unsigned char ch, uintptr_t child);
+node16_add_child(struct art_node16* node, struct art_node** node_ref, unsigned char ch, void * child);
 
 static void
-node48_add_child(struct art_node48* node, struct art_node** node_ref, unsigned char ch, uintptr_t child);
+node48_add_child(struct art_node48* node, struct art_node** node_ref, unsigned char ch, void * child);
 
 static void
-node256_add_child(struct art_node256* node, unsigned char ch, uintptr_t child);
+node256_add_child(struct art_node256* node, unsigned char ch, void * child);
 
 // All removal functions assume the child to remove is leaf, meaning they don't try removing anything recursively.
 // They also do not free the leaf node for bookkeeping purpose. The key insight is that due to path compression,
@@ -251,7 +251,7 @@ copy_header(struct art_node* dest, struct art_node* src);
 static uint32_t
 min(uint32_t a, uint32_t b);
 
-static uintptr_t
+static void *
 art_search(struct art* t, unsigned char* key, uint32_t key_len);
 
 static char*
@@ -280,10 +280,10 @@ libart_art_destroy(struct art* tree)
     return 0;
 }
 
-uintptr_t
+void *
 libart_art_search(struct art* t, char* key)
 {
-    uintptr_t val = NULL;
+    void * val = NULL;
 
     if (t == NULL || key == NULL)
     {
@@ -292,7 +292,7 @@ libart_art_search(struct art* t, char* key)
 
     val = art_search(t, (unsigned char*)key, strlen(key) + 1);
 
-    return ;
+    return val;
 }
 
 bool
@@ -302,14 +302,14 @@ libart_art_contains_key(struct art* t, char* key)
     {
         return false;
     }
-    uintptr_t val = art_search(t, (unsigned char*)key, strlen(key) + 1);
+    void * val = art_search(t, (unsigned char*)key, strlen(key) + 1);
     return val != NULL;
 }
 
 int
-libart_art_insert(struct art* t, char* key, uintptr_t value)
+libart_art_insert(struct art* t, char* key, void * value)
 {
-    uintptr_t old_val = NULL;
+    void * old_val = NULL;
     bool new = false;
 
     if (t == NULL || key == NULL)
@@ -367,7 +367,7 @@ return a;
 }
 
 static void
-create_art_leaf(struct art_leaf** leaf, unsigned char* key, uint32_t key_len, uintptr_t value)
+create_art_leaf(struct art_leaf** leaf, unsigned char* key, uint32_t key_len, void * value)
 {
     struct art_leaf* l = NULL;
     l = malloc(sizeof(struct art_leaf) + key_len);
@@ -562,8 +562,8 @@ error:
 return NULL;
 }
 
-static uintptr_t
-art_node_insert(struct art_node* node, struct art_node** node_ref, uint32_t depth, unsigned char* key, uint32_t key_len, uintptr_t value, bool* new)
+static void *
+art_node_insert(struct art_node* node, struct art_node** node_ref, uint32_t depth, unsigned char* key, uint32_t key_len, void * value, bool* new)
 {
     struct art_leaf* leaf = NULL;
     struct art_leaf* min_leaf = NULL;
@@ -572,7 +572,7 @@ art_node_insert(struct art_node* node, struct art_node** node_ref, uint32_t dept
     struct art_node* new_node = NULL;
     struct art_node** next = NULL;
     unsigned char* leaf_key = NULL;
-    uintptr_t old_val = NULL;
+    void * old_val = NULL;
     if (node == NULL)
     {
         // Lazy expansion, skip creating an inner node since it currently will have only this one leaf.
@@ -616,7 +616,7 @@ art_node_insert(struct art_node* node, struct art_node** node_ref, uint32_t dept
         new_node->prefix_len = idx - depth;
         depth += new_node->prefix_len;
         node_add_child(new_node, &new_node, key[depth], SET_LEAF(leaf));
-        node_add_child(new_node, &new_node, leaf_key[depth], (uintptr_t)node);
+        node_add_child(new_node, &new_node, leaf_key[depth], (void *)node);
         // replace with new node
         *node_ref = new_node;
         *new = true;
@@ -761,7 +761,7 @@ art_node_delete(struct art_node* node, struct art_node** node_ref, uint32_t dept
 }
 
 static int
-art_node_iterate(struct art_node* node, art_callback cb, uintptr_t data)
+art_node_iterate(struct art_node* node, art_callback cb, void * data)
 {
     struct art_leaf* l = NULL;
     struct art_node* child = NULL;
@@ -848,7 +848,7 @@ art_node_iterate(struct art_node* node, art_callback cb, uintptr_t data)
 }
 
 static void
-node_add_child(struct art_node* node, struct art_node** node_ref, unsigned char ch, uintptr_t child)
+node_add_child(struct art_node* node, struct art_node** node_ref, unsigned char ch, void * child)
 {
     switch (node->type)
     {
@@ -868,14 +868,14 @@ node_add_child(struct art_node* node, struct art_node** node_ref, unsigned char 
 }
 
 static void
-node4_add_child(struct art_node4* node, struct art_node** node_ref, unsigned char ch, uintptr_t child)
+node4_add_child(struct art_node4* node, struct art_node** node_ref, unsigned char ch, void * child)
 {
     if (node->node.num_children < 4)
     {
         int idx = find_index(ch, node->keys, node->node.num_children);
         // right shift the right part to make space for the key, so that we keep the keys in order
         memmove(node->keys + (idx + 1) + 1, node->keys + (idx + 1), node->node.num_children - (idx + 1));
-        memmove(node->children + (idx + 1) + 1, node->children + (idx + 1), (node->node.num_children - (idx + 1)) * sizeof(uintptr_t));
+        memmove(node->children + (idx + 1) + 1, node->children + (idx + 1), (node->node.num_children - (idx + 1)) * sizeof(void *));
 
         node->keys[idx + 1] = ch;
         node->children[idx + 1] = (struct art_node*)child;
@@ -887,7 +887,7 @@ node4_add_child(struct art_node4* node, struct art_node** node_ref, unsigned cha
         struct art_node16* new_node = NULL;
         create_art_node16(&new_node);
         copy_header((struct art_node*)new_node, (struct art_node*)node);
-        memcpy(new_node->children, node->children, node->node.num_children * sizeof(uintptr_t));
+        memcpy(new_node->children, node->children, node->node.num_children * sizeof(void *));
         memcpy(new_node->keys, node->keys, node->node.num_children);
         // replace the node through node reference
         *node_ref = (struct art_node*)new_node;
@@ -898,14 +898,14 @@ node4_add_child(struct art_node4* node, struct art_node** node_ref, unsigned cha
 }
 
 static void
-node16_add_child(struct art_node16* node, struct art_node** node_ref, unsigned char ch, uintptr_t child)
+node16_add_child(struct art_node16* node, struct art_node** node_ref, unsigned char ch, void * child)
 {
     if (node->node.num_children < 16)
     {
         int idx = find_index(ch, node->keys, node->node.num_children);
         // right shift the right part to make space for the key, so that we keep the keys in order
         memmove(node->keys + (idx + 1) + 1, node->keys + (idx + 1), node->node.num_children - (idx + 1));
-        memmove(node->children + (idx + 1) + 1, node->children + (idx + 1), (node->node.num_children - (idx + 1)) * sizeof(uintptr_t));
+        memmove(node->children + (idx + 1) + 1, node->children + (idx + 1), (node->node.num_children - (idx + 1)) * sizeof(void *));
 
         node->keys[idx + 1] = ch;
         node->children[idx + 1] = (struct art_node*)child;
@@ -917,7 +917,7 @@ node16_add_child(struct art_node16* node, struct art_node** node_ref, unsigned c
         struct art_node48* new_node = NULL;
         create_art_node48(&new_node);
         copy_header((struct art_node*)new_node, (struct art_node*)node);
-        memcpy(new_node->children, node->children, node->node.num_children * sizeof(uintptr_t));
+        memcpy(new_node->children, node->children, node->node.num_children * sizeof(void *));
         for (int i = 0; i < node->node.num_children; i++)
         {
             new_node->keys[node->keys[i]] = i + 1;
@@ -930,7 +930,7 @@ node16_add_child(struct art_node16* node, struct art_node** node_ref, unsigned c
 }
 
 static void
-node48_add_child(struct art_node48* node, struct art_node** node_ref, unsigned char ch, uintptr_t child)
+node48_add_child(struct art_node48* node, struct art_node** node_ref, unsigned char ch, void * child)
 {
     if (node->node.num_children < 48)
     {
@@ -966,7 +966,7 @@ node48_add_child(struct art_node48* node, struct art_node** node_ref, unsigned c
 }
 
 static void
-node256_add_child(struct art_node256* node, unsigned char ch, uintptr_t child)
+node256_add_child(struct art_node256* node, unsigned char ch, void * child)
 {
     node->node.num_children++;
     node->children[ch] = (struct art_node*)child;
@@ -1147,7 +1147,7 @@ node4_remove_child(struct art_node4* node, struct art_node** node_ref, unsigned 
     struct art_node* child = NULL;
     idx = find_index(ch, node->keys, node->node.num_children);
     memmove(node->keys + idx, node->keys + idx + 1, node->node.num_children - (idx + 1));
-    memmove(node->children + idx, node->children + idx + 1, sizeof(uintptr_t) * (node->node.num_children - (idx + 1)));
+    memmove(node->children + idx, node->children + idx + 1, sizeof(void *) * (node->node.num_children - (idx + 1)));
     node->node.num_children--;
     // path compression, merge the node with its child
     if (node->node.num_children == 1)
@@ -1186,7 +1186,7 @@ node16_remove_child(struct art_node16* node, struct art_node** node_ref, unsigne
     struct art_node4* new_node = NULL;
     idx = find_index(ch, node->keys, node->node.num_children);
     memmove(node->keys + idx, node->keys + idx + 1, node->node.num_children - (idx + 1));
-    memmove(node->children + idx, node->children + idx + 1, sizeof(uintptr_t) * (node->node.num_children - (idx + 1)));
+    memmove(node->children + idx, node->children + idx + 1, sizeof(void *) * (node->node.num_children - (idx + 1)));
     node->node.num_children--;
     // downgrade node
     // Trick from libart, do not downgrade immediately to avoid jumping on 4/5 boundary
@@ -1195,7 +1195,7 @@ node16_remove_child(struct art_node16* node, struct art_node** node_ref, unsigne
         create_art_node4(&new_node);
         copy_header((struct art_node*)new_node, (struct art_node*)node);
         memcpy(new_node->keys, node->keys, node->node.num_children);
-        memcpy(new_node->children, node->children, node->node.num_children * sizeof(uintptr_t));
+        memcpy(new_node->children, node->children, node->node.num_children * sizeof(void *));
         free(node);
         *node_ref = (struct art_node*)new_node;
     }
@@ -1267,7 +1267,7 @@ node256_remove_child(struct art_node256* node, struct art_node** node_ref, unsig
     }
 }
 
-static uintptr_t
+static void *
 art_search(struct art* t, unsigned char* key, uint32_t key_len)
 {
     struct art_node* node = NULL;
@@ -1309,7 +1309,7 @@ art_search(struct art* t, unsigned char* key, uint32_t key_len)
 }
 
 static int
-art_iterate(struct art* t, art_callback cb, uintptr_t data)
+art_iterate(struct art* t, art_callback cb, void * data)
 {
     return art_node_iterate(t->root, cb, data);
 }
