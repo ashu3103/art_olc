@@ -371,6 +371,71 @@ libart_art_clear(struct art* t)
     return 0;
 }
 
+uint64_t
+libart_read_lock_and_restart(struct art_node* node, bool* restart)
+{
+    uint64_t version;
+    bool do_restart = false;
+
+    version = await_node_unlocked(node);
+    if (IS_OBSOLETE(version))
+    {
+        do_restart = true;
+    }
+
+    *restart = do_restart;
+    return version;
+}
+
+void
+libart_check_version_and_restart(struct art_node* node, uint64_t version, bool* restart)
+{
+    libart_read_unlock_and_restart(node, version, restart);
+}
+
+void
+libart_read_unlock_and_restart(struct art_node* node, uint64_t version, bool* restart)
+{
+    bool do_restart = false;
+    do_restart = (atomic_load(&node->version) != version);
+    *restart = do_restart;
+}
+
+void
+libart_upgrade_to_write_unlock_and_restart(struct art_node* node, uint64_t version, bool* restart)
+{
+    bool do_restart = false;
+    if (!atomic_compare_exchange_strong(&node->version, &version, SET_LOCK_INCREMENT_VERSION(version)))
+    {
+        do_restart = true;
+    }
+    *restart = do_restart;
+}
+
+void
+libart_write_lock_or_restart(struct art_node* node, bool* restart)
+{
+    uint64_t version;
+    // try acquiring a read lock first
+    version = libart_read_lock_and_restart(node, restart);
+    if (*restart) return;
+
+    libart_upgrade_to_write_unlock_and_restart(node, version, restart);
+    if (*restart) return;
+}
+
+void
+libart_write_unlock(struct art_node* node)
+{
+    atomic_fetch_add(&node->version, 2);
+}
+
+void
+libart_write_unlock_obsolete(struct art_node* node)
+{
+    atomic_fetch_add(&node->version, 3);
+}
+
 static uint32_t
 min(uint32_t a, uint32_t b)
 {
